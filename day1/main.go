@@ -34,13 +34,20 @@ func main() {
 	fmt.Println("Starting at state", state)
 
 	for _, instruction := range instructions {
-		state = state.Apply(instruction)
+		var seenZeros int
+		state, seenZeros = state.Apply(instruction)
+
+		count += seenZeros
 
 		if state == State(0) {
 			count++
 		}
 
-		fmt.Println("Applying instruction", instruction, "resulted in", state)
+		if seenZeros > 0 {
+			fmt.Println("Applying instruction", instruction, "resulted in", state, "pointing", seenZeros, "times at 0")
+		} else {
+			fmt.Println("Applying instruction", instruction, "resulted in", state)
+		}
 	}
 
 	fmt.Println("We have seen zero", count, "times")
@@ -101,7 +108,7 @@ type Rotation struct {
 
 type State int
 
-func (s State) Apply(rot Rotation) State {
+func (s State) Apply(rot Rotation) (State, int) {
 	if rot.Direction == DirectionLeft {
 		return s.decrease(rot.Offset)
 	}
@@ -110,19 +117,40 @@ func (s State) Apply(rot Rotation) State {
 		return s.increase(rot.Offset)
 	}
 
-	return s
+	return s, 0
 }
 
-func (s State) decrease(offset int) State {
-	offset = offset % 100 // Every 100 is a full spin, no need to complicate things.
-
-	if s >= State(offset) {
-		return s - State(offset)
+func (s State) decrease(offset int) (State, int) {
+	if s == 0 {
+		s = 100
 	}
 
-	return 100 - (State(offset) - s)
+	roundtrips := (offset / 100)
+	s = (State((roundtrips+1)*100) + s) - State(offset)
+
+	if s >= 100 {
+		return s % 100, roundtrips
+	}
+
+	return s, roundtrips + 1
 }
 
-func (s State) increase(offset int) State {
-	return (s + State(offset)) % 100
+func (s State) increase(offset int) (State, int) {
+	newState := s + State(offset)
+	seenZeros := int(newState) / 100
+
+	newState = newState % 100
+
+	if newState == 0 {
+		seenZeros = seenZeros - 1
+	}
+
+	return newState, seenZeros
+}
+
+func Rot(d Direction, o int) Rotation {
+	return Rotation{
+		Direction: d,
+		Offset:    o,
+	}
 }
