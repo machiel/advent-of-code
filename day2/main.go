@@ -87,14 +87,19 @@ func isRepetitive(i int) bool {
 func FindRepetive(input string) bool {
 	l := len(input)
 
-	if l%2 == 1 {
-		return false
+	for i := 1; i < len(input); i++ {
+		if l%i != 0 {
+			continue
+		}
+
+		repeats := l / i
+		comparePart := input[:i]
+		compareString := strings.Repeat(comparePart, repeats)
+
+		if input == compareString {
+			return true
+		}
 	}
 
-	half := l / 2
-
-	first := input[:half]
-	second := input[half:]
-
-	return first == second
+	return false
 }
