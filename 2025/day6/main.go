@@ -10,17 +10,7 @@ import (
 )
 
 func main() {
-	input := make([][]string, 0)
-
-	for line := range readInput() {
-		if line == "" {
-			continue
-		}
-
-		input = append(input, strings.Fields(line))
-	}
-
-	ops := transform(input)
+	ops := parseOperations(transform(parseInput(readInput())))
 
 	var total int
 
@@ -29,6 +19,51 @@ func main() {
 	}
 
 	fmt.Println(total)
+}
+
+func parseInput(in iter.Seq[string]) [][]string {
+	sizes := map[int]int{}
+	lines := make([]string, 0)
+
+	for line := range in {
+		if line == "" {
+			continue
+		}
+
+		fields := strings.Fields(line)
+
+		for i, field := range fields {
+			if _, ok := sizes[i]; !ok {
+				sizes[i] = len(field)
+				continue
+			}
+
+			if len(field) > sizes[i] {
+				sizes[i] = len(field)
+			}
+		}
+
+		lines = append(lines, line)
+	}
+
+	out := make([][]string, 0)
+
+	for _, line := range lines {
+		fields := make([]string, len(sizes))
+
+		for i := 0; i < len(sizes); i++ {
+			value := line[:sizes[i]]
+			fields[i] = value
+
+			if i < len(sizes)-1 {
+				line = line[sizes[i]+1:]
+			}
+		}
+
+		out = append(out, fields)
+	}
+
+	return out
 }
 
 func readInput() iter.Seq[string] {
@@ -47,6 +82,18 @@ func parse(in string) int {
 	}
 
 	return v
+}
+
+func transform(in [][]string) [][]string {
+	out := make([][]string, len(in[0]))
+
+	for _, row := range in {
+		for i, value := range row {
+			out[i] = append(out[i], value)
+		}
+	}
+
+	return out
 }
 
 type Type string
@@ -82,25 +129,51 @@ func (o Operation) Solve() int {
 	return result
 }
 
-func transform(in [][]string) []Operation {
-	out := make([]Operation, len(in[0]))
+func resolveValues(in []string) []int {
+	numbers := make([]string, len(in[0]))
 
-	for lineNo, row := range in {
-		for index, v := range row {
-			if lineNo == len(in)-1 {
-				switch v {
-				case "+":
-					out[index].Operation = Add
-				case "*":
-					out[index].Operation = Multiply
-				default:
-					panic("Input " + v + "not known")
-				}
-			} else {
-				out[index].Values = append(out[index].Values, parse(v))
-			}
+	l := len(in[0]) - 1
+
+	for i := l; i >= 0; i-- {
+		for _, v := range in {
+			numbers[l-i] = numbers[l-i] + string(v[i])
 		}
 	}
 
+	out := make([]int, 0, len(numbers))
+
+	for _, n := range numbers {
+		n = strings.TrimSpace(n)
+		out = append(out, parse(n))
+	}
+
 	return out
+}
+
+func parseOperation(in []string) Operation {
+	return Operation{
+		Operation: parseType(in[len(in)-1]),
+		Values:    resolveValues(in[:len(in)-1]),
+	}
+}
+
+func parseOperations(in [][]string) []Operation {
+	out := make([]Operation, 0, len(in))
+
+	for _, row := range in {
+		out = append(out, parseOperation(row))
+	}
+
+	return out
+}
+
+func parseType(in string) Type {
+	switch strings.TrimSpace(in) {
+	case "+":
+		return Add
+	case "*":
+		return Multiply
+	}
+
+	panic("Input " + in + "not known")
 }
