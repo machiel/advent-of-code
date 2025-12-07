@@ -9,7 +9,15 @@ import (
 )
 
 func main() {
-	fmt.Println(partOne(readInput()))
+	var maps []Map
+
+	for line := range readInput() {
+		m := lineToMap(line)
+
+		maps = append(maps, m)
+	}
+
+	fmt.Println(evaluate(World{}, maps))
 }
 
 func readInput() iter.Seq[string] {
@@ -24,69 +32,67 @@ func readInput() iter.Seq[string] {
 type Position int
 
 type World struct {
-	Beams map[Position]struct{}
+	Beam Position
 }
 
-func partOne(lines iter.Seq[string]) int {
-	var world World
-	var total int
+var cache = map[World]map[string]int{}
 
-	for line := range lines {
-		m := lineToMap(line)
-
-		var splits int
-		world, splits = evaluate(world, m)
-
-		total += splits
+func evaluate(w World, m []Map) int {
+	if len(m) == 0 {
+		return 1
 	}
 
-	return total
-}
+	entry := m[0]
 
-func evaluate(w World, m Map) (World, int) {
-	var splits int
-
-	out := World{
-		Beams: make(map[Position]struct{}, 0),
+	if v, ok := cache[w][entry.Line]; ok {
+		return v
 	}
 
-	for _, s := range m.Starts {
-		out.Beams[s] = struct{}{}
+	if entry.Start != nil {
+		return evaluate(World{
+			Beam: *entry.Start,
+		}, m[1:])
 	}
 
-	for _, s := range m.Splitters {
-		_, ok := w.Beams[s]
-		if !ok {
+	var totalSplits int
+
+	for _, s := range entry.Splitters {
+		if s != w.Beam {
 			continue
 		}
 
-		delete(w.Beams, s)
+		totalSplits += evaluate(World{Beam: s - 1}, m[1:])
+		totalSplits += evaluate(World{Beam: s + 1}, m[1:])
 
-		out.Beams[s-1] = struct{}{}
-		out.Beams[s+1] = struct{}{}
+		if _, ok := cache[w]; !ok {
+			cache[w] = make(map[string]int)
+		}
 
-		splits++
+		cache[w][entry.Line] = totalSplits
+
+		return totalSplits
 	}
 
-	for k := range w.Beams {
-		out.Beams[k] = struct{}{}
-	}
-
-	return out, splits
+	return evaluate(w, m[1:])
 }
 
+type MapKey string
+
 type Map struct {
-	Starts    []Position
+	Line      string
+	Start     *Position
 	Splitters []Position
 }
 
 func lineToMap(line string) Map {
-	var m Map
+	m := Map{
+		Line: line,
+	}
 
 	for i, v := range line {
 		switch v {
 		case 'S':
-			m.Starts = append(m.Starts, Position(i))
+			m.Start = toPtr(Position(i))
 		case '^':
 			m.Splitters = append(m.Splitters, Position(i))
 		case '.':
@@ -96,4 +102,8 @@ func lineToMap(line string) Map {
 	}
 
 	return m
+}
+
+func toPtr[T any](t T) *T {
+	return &t
 }
