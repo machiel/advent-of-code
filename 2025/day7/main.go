@@ -9,15 +9,24 @@ import (
 )
 
 func main() {
+	n := buildGraph(parseMap(readInput()))
+	fmt.Println("Finished building graph")
+
+	fmt.Println(countPathways(n))
+}
+
+func parseMap(lines iter.Seq[string]) []Map {
 	var maps []Map
 
-	for line := range readInput() {
+	for line := range lines {
 		m := lineToMap(line)
 
-		maps = append(maps, m)
+		if !m.Empty() {
+			maps = append(maps, m)
+		}
 	}
 
-	fmt.Println(evaluate(World{}, maps))
+	return maps
 }
 
 func readInput() iter.Seq[string] {
@@ -31,71 +40,20 @@ func readInput() iter.Seq[string] {
 
 type Position int
 
-type World struct {
-	Beam Position
-}
+type Map []Position
 
-var cache = map[World]map[string]int{}
-
-func evaluate(w World, m []Map) int {
-	if len(m) == 0 {
-		return 1
-	}
-
-	entry := m[0]
-
-	if v, ok := cache[w][entry.Line]; ok {
-		return v
-	}
-
-	if entry.Start != nil {
-		return evaluate(World{
-			Beam: *entry.Start,
-		}, m[1:])
-	}
-
-	var totalSplits int
-
-	for _, s := range entry.Splitters {
-		if s != w.Beam {
-			continue
-		}
-
-		totalSplits += evaluate(World{Beam: s - 1}, m[1:])
-		totalSplits += evaluate(World{Beam: s + 1}, m[1:])
-
-		if _, ok := cache[w]; !ok {
-			cache[w] = make(map[string]int)
-		}
-
-		cache[w][entry.Line] = totalSplits
-
-		return totalSplits
-	}
-
-	return evaluate(w, m[1:])
-}
-
-type MapKey string
-
-type Map struct {
-	Line      string
-	Start     *Position
-	Splitters []Position
+func (m Map) Empty() bool {
+	return len(m) == 0
 }
 
 func lineToMap(line string) Map {
-	m := Map{
-		Line: line,
-	}
+	var m Map
 
 	for i, v := range line {
 		switch v {
-		case 'S':
-			m.Start = toPtr(Position(i))
 		case '^':
-			m.Splitters = append(m.Splitters, Position(i))
-		case '.':
+			m = append(m, Position(i))
+		case 'S', '.':
 		default:
 			panic("Unknown character: " + string(v))
 		}
@@ -104,6 +62,71 @@ func lineToMap(line string) Map {
 	return m
 }
 
-func toPtr[T any](t T) *T {
-	return &t
+func buildGraph(in []Map) *Node {
+	root := &Node{
+		Index: in[0][0],
+	}
+
+	pendingNodes := map[Position][]*Node{
+		in[0][0]: {root},
+	}
+
+	for _, m := range in[1:] {
+		for _, pos := range m {
+
+			n := &Node{
+				Index: pos,
+			}
+
+			var foundParent bool
+
+			if parents, ok := pendingNodes[pos-1]; ok {
+				for _, parent := range parents {
+					if parent.Right == nil {
+						parent.Right = n
+
+						foundParent = true
+					}
+				}
+			}
+
+			if parents, ok := pendingNodes[pos+1]; ok {
+				for _, parent := range parents {
+					if parent.Left == nil {
+						parent.Left = n
+
+						foundParent = true
+					}
+				}
+			}
+
+			if foundParent {
+				pendingNodes[pos] = append(pendingNodes[pos], n)
+			}
+		}
+	}
+
+	return root
+}
+
+type Node struct {
+	Index Position
+	Left  *Node
+	Right *Node
+
+	Eval *int
+}
+
+func countPathways(n *Node) int {
+	if n == nil {
+		return 1
+	}
+
+	if n.Eval != nil {
+		return *n.Eval
+	}
+
+	eval := countPathways(n.Left) + countPathways(n.Right)
+	n.Eval = &eval
+	return eval
 }
